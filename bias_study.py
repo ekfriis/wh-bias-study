@@ -125,12 +125,13 @@ print "Expected signal: %0.4f" % expected_signal
 
 def run_toys(f3_generate_pdf, f3_fit_pdf,
              sig_generate_pdf, sig_fit_pdf,
-             ntoys, fake_error_strategy):
-    output = ROOT.TH1F("signal_pull", "signal_pull", 100, -4, 4)
+             ntoys, fake_error_strategy, img_file):
+    canvas = ROOT.TCanvas("asdf", "asdf", 800, 800)
+    output = ROOT.TH1F("signal_pull", "signal_pull", 100, -5, 5)
     for i in range(ntoys):
         ws.loadSnapshot("snap")
         print "Fitting toy %i" % i
-        f3_pseudo_data = f3_generate_pdf.generate(
+        f3_pseudo_data = f3_generate_pdf.generateBinned(
             ROOT.RooArgSet(mass), ROOT.RooFit.Extended())
         f3_fit_result = f3_fit_pdf.fitTo(
             f3_pseudo_data,
@@ -173,7 +174,8 @@ def run_toys(f3_generate_pdf, f3_fit_pdf,
         sig_pull = sig_residual / ws.var("sig_signal_norm").getError()
 
         output.Fill(sig_pull)
-    return output
+    output.Draw()
+    canvas.SaveAs(img_file)
 
 
 def do_nothing_strategy(f3_fit_result):
@@ -187,8 +189,10 @@ def current_strategy(f3_fit_result):
     f3_fakes_mean_postfit = f3_fit_result.floatParsFinal().find(
         "f3_fakes_norm")
     delta = abs(f3_fakes_mean_postfit.getVal() - f3_fakes_mean_prefit.getVal())
-    f3_sigma = ws.var("f3_fakes_norm").getError()
-    ws.var("sig_fakes_sigma").setVal(max(f3_sigma, delta))
+    delta /= f3_fakes_mean_prefit.getVal()
+    f3_sigma = f3_fakes_mean_postfit.getError() / f3_fakes_mean_postfit.getVal()
+    ws.var("sig_fakes_sigma").setVal(
+        max(f3_sigma, delta) * ws.var("sig_fakes_norm").getVal())
 
 
 def new_strategy(f3_fit_result):
@@ -198,51 +202,33 @@ def new_strategy(f3_fit_result):
     f3_fakes_mean_postfit = f3_fit_result.floatParsFinal().find(
         "f3_fakes_norm")
     delta = abs(f3_fakes_mean_postfit.getVal() - f3_fakes_mean_prefit.getVal())
+    delta /= f3_fakes_mean_prefit.getVal()
     scale = f3_fakes_mean_postfit.getVal() / f3_fakes_mean_prefit.getVal()
     sig_mean_current = ws.var("sig_fakes_mean").getVal()
     print "Scaling by: %f" % scale
     ws.var("sig_fakes_mean").setVal(sig_mean_current * scale)
-    f3_sigma = ws.var("f3_fakes_norm").getError()
-    ws.var("sig_fakes_sigma").setVal(max(f3_sigma, delta))
+    f3_sigma = f3_fakes_mean_postfit.getError() / f3_fakes_mean_postfit.getVal()
+    ws.var("sig_fakes_sigma").setVal(
+        max(f3_sigma, delta) * ws.var("sig_fakes_norm").getVal())
 
-canvas = ROOT.TCanvas("asdf", "asdf", 800, 800)
 
-ntoys = 10000
-
-pulls = run_toys(f3_expected, f3_expected,
-                 sig_expected, sig_expected,
-                 ntoys, do_nothing_strategy)
-
-pulls.Draw()
-canvas.SaveAs("do_nothing.png")
+ntoys = 1000
 
 pulls = run_toys(f3_expected, f3_expected,
                  sig_expected, sig_expected,
-                 ntoys, current_strategy)
-pulls.Draw()
-canvas.SaveAs("current.png")
-
+                 ntoys, do_nothing_strategy, "do_nothing.png")
 pulls = run_toys(f3_expected, f3_expected,
                  sig_expected, sig_expected,
-                 ntoys, new_strategy)
-pulls.Draw()
-canvas.SaveAs("new.png")
-
+                 ntoys, current_strategy, "current.png")
+pulls = run_toys(f3_expected, f3_expected,
+                 sig_expected, sig_expected,
+                 ntoys, new_strategy, "new.png")
 pulls = run_toys(f3_expected_biased, f3_expected,
                  sig_expected_biased, sig_expected,
-                 ntoys, do_nothing_strategy)
-
-pulls.Draw()
-canvas.SaveAs("do_nothing_biased.png")
-
+                 ntoys, do_nothing_strategy, "do_nothing_biased.png")
 pulls = run_toys(f3_expected_biased, f3_expected,
                  sig_expected_biased, sig_expected,
-                 ntoys, current_strategy)
-pulls.Draw()
-canvas.SaveAs("current_biased.png")
-
+                 ntoys, current_strategy, "current_biased.png")
 pulls = run_toys(f3_expected_biased, f3_expected,
                  sig_expected_biased, sig_expected,
-                 ntoys, new_strategy)
-pulls.Draw()
-canvas.SaveAs("new_biased.png")
+                 ntoys, new_strategy, "new_biased.png")
